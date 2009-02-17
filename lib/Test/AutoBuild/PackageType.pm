@@ -18,7 +18,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
-# $Id$
+# $Id: PackageType.pm,v 1.8 2007/12/08 21:03:02 danpb Exp $
 
 =pod
 
@@ -49,12 +49,12 @@ The valid configuration options for the C<package-types> block are
 package Test::AutoBuild::PackageType;
 
 use strict;
+use warnings;
 use Carp qw(confess);
-use Test::AutoBuild::Package;
 use File::Find;
 use File::Path;
-
-=pod
+use Log::Log4perl;
+use Test::AutoBuild::Package;
 
 =item my $mod = Test::AutoBuild::PackageType->new(  );
 
@@ -75,15 +75,15 @@ sub new {
     $self->{filetype} = exists $params{filetype} ? $params{filetype} : "file";
 
     if (exists $params{spool}) {
-        $self->spool ($params{spool});
+	$self->spool ($params{spool});
     } else {
-        $self->{spool} = [];
+	$self->{spool} = [];
     }
 
     if (exists $params{clean}) {
-        $self->clean ($params{clean});
+	$self->clean ($params{clean});
     } else {
-        $self->{clean} = undef;
+	$self->{clean} = undef;
     }
 
     return $self;
@@ -105,12 +105,12 @@ sub label {
 sub spool {
     my $self = shift;
     if (@_) {
-        local $_ = shift;
-        if (ref ($_) eq "ARRAY") {
-            $self->{spool} = $_;
-        } else {
-            $self->{spool} = [ $_ ];
-        }
+	local $_ = shift;
+	if (ref ($_) eq "ARRAY") {
+	    $self->{spool} = $_;
+	} else {
+	    $self->{spool} = [ $_ ];
+	}
     }
     return $self->{spool};
 }
@@ -134,26 +134,25 @@ sub filetype {
     return $self->{filetype};
 }
 
-
 sub clean {
     my $self = shift;
     if (@_) {
-        # clean option has the format like "7d" for 7 days, "4h" for 4 hours,
-        # etc. Convert this into minutes for the -mmin option of find.
-        my $clean = shift;
-        my $mins;
+	# clean option has the format like "7d" for 7 days, "4h" for 4 hours,
+	# etc. Convert this into minutes for the -mmin option of find.
+	my $clean = shift;
+	my $mins;
 
-        if ($clean =~ /^(\d+)d$/) {
-            $mins = $1 * 24 * 60;
-        } elsif ($clean =~ /^(\d+)h$/) {
-            $mins = $1 * 60;
-        } elsif ($clean =~ /^(\d+)m$/) {
-            $mins = $1;
-        } else {
-            confess "clean option, if it exists, must have form NNd (days), NNh (hours) or NNm (mins)";
-        }
+	if ($clean =~ /^(\d+)d$/) {
+	    $mins = $1 * 24 * 60;
+	} elsif ($clean =~ /^(\d+)h$/) {
+	    $mins = $1 * 60;
+	} elsif ($clean =~ /^(\d+)m$/) {
+	    $mins = $1;
+	} else {
+	    confess "clean option, if it exists, must have form NNd (days), NNh (hours) or NNm (mins)";
+	}
 
-        $self->{clean} = $mins;
+	$self->{clean} = $mins;
     }
     return $self->{clean};
 }
@@ -166,28 +165,29 @@ sub do_clean {
 
     return unless $self->{clean};
 
+    my $log = Log::Log4perl->get_logger();
     my @spooldirs = grep { -d $_ } @{$self->{spool}};
     my $ext = $self->{extension};
     my $mins = $self->{clean};
 
     if (@spooldirs == 0) {
-        warn "warning: no spool directories for $self->{name}\n";
+	$log->info("warning: no spool directories for $self->{name}");
     } else {
-        if ($self->{filetype} eq "directory") {
-            foreach (@spooldirs) {
-                opendir(DIR, $_) or die("can't opendir $_: $!");
-                foreach my $dir (grep { m/$ext$/ && -d && ((-M $_) * 60 * 24) > $mins } readdir(DIR)) {
-                    rmtree($dir);
-                }
-                closedir DIR;
-            }
-        } else {
-            find ( { wanted => sub {
-                if ( m/$ext$/ && -f && ((-M $_) * 60 * 24 > $mins)) {
-                    unlink
-                    }
-            }, no_chdir => 1 }, @spooldirs );
-        }
+	if ($self->{filetype} eq "directory") {
+	    foreach (@spooldirs) {
+		opendir(DIR, $_) or die("can't opendir $_: $!");
+		foreach my $dir (grep { m/$ext$/ && -d && ((-M $_) * 60 * 24) > $mins } readdir(DIR)) {
+		    rmtree($dir);
+		}
+		closedir DIR;
+	    }
+	} else {
+	    find ( { wanted => sub {
+		if ( m/$ext$/ && -f && ((-M $_) * 60 * 24 > $mins)) {
+		    unlink
+		    }
+	    }, no_chdir => 1 }, @spooldirs );
+	}
     }
 }
 
@@ -196,32 +196,31 @@ sub snapshot {
 
     my @spooldirs = grep { -d $_ } @{$self->{spool}};
     my $ext = $self->{extension};
-    my $ext_re = "$ext";
-    $ext_re =~ s/\./\\./g;
     my $cmd = "";
+    (my $ext_re = "$ext") =~ s/\./\\./g;
 
     my $packages = {};
 
     if (@spooldirs) {
-        if ($self->{filetype} eq "directory") {
-            foreach my $dir (@spooldirs) {
-                opendir(DIR, $dir) or next;
-                foreach my $match (map { File::Spec->catdir($dir,$_) }
-                                   grep { -d File::Spec->catdir($dir,$_) && !m/^\.$/ && !m/^\.\.$/ && m/.*$ext_re/ } readdir(DIR)) {
-                    $packages->{$match} =
-                        new Test::AutoBuild::Package (name => $match, type => $self);
-                }
-                closedir DIR;
-            }
-        } else {
-            find ( { wanted => sub {
-                if ( ( -f || -l ) && m/.*$ext_re/ ) {
-                    $packages->{$File::Find::name} =
-                        new Test::AutoBuild::Package (name => $File::Find::name,
-                                                          type => $self);
-                }
-            }, no_chdir => 1 }, @spooldirs);
-        }
+	if ($self->{filetype} eq "directory") {
+	    foreach my $dir (@spooldirs) {
+		opendir(DIR, $dir) or next;
+		foreach my $match (map { File::Spec->catdir($dir,$_) }
+				   grep { -d File::Spec->catdir($dir,$_) && !m/^\.$/ && !m/^\.\.$/ && m/.*$ext_re/ } readdir(DIR)) {
+		    $packages->{$match} =
+			new Test::AutoBuild::Package (name => $match, type => $self);
+		}
+		closedir DIR;
+	    }
+	} else {
+	    find ( { wanted => sub {
+		if ( ( -f || -l ) && m/.*$ext_re/ ) {
+		    $packages->{$File::Find::name} =
+			new Test::AutoBuild::Package (name => $File::Find::name,
+							  type => $self);
+		}
+	    }, no_chdir => 1 }, @spooldirs);
+	}
     }
 
     return $packages;
@@ -233,7 +232,7 @@ sub snapshot {
 
 __END__
 
-=back 4
+=back
 
 =head1 AUTHORS
 
@@ -242,8 +241,9 @@ Daniel Berrange <dan@berrange.com>
 =head1 COPYRIGHT
 
 Copyright (C) 2002 Daniel Berrange <dan@berrange.com>
+
 =head1 SEE ALSO
 
-L<perl(1)>
+C<perl(1)>
 
 =cut

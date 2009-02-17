@@ -4,15 +4,17 @@
   [% IF repositories.size > 0 %]
     [% FOREACH repositories %]
       [% IF modules.size > 0 %]
-        <h3>[% label %]</h3>
+        <h3>[% label | html %]</h3>
 
-        <table class="modules">
+        <table id="modules" class="data">
+          <tbody>
           [% FOREACH modules %]
-            <tr>
-              <th><a href="module-[% name %].html">[% label %]</a></th>
+            <tr class="[% IF loop.index() % 2 == 0 %]odd[%ELSE%]even[%END%]">
+              <td><a href="module-[% name | html %].html">[% label | html %]</a></td>
               <td class="[% status %]">[% status %]</td>
             </tr>
           [% END %]
+          </tbody>
         </table>
       [% END %]
     [% END %]

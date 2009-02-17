@@ -1,0 +1,46 @@
+/***********************************************
+ * Some generic style settings for the whole page,
+ * which try to reset the browser defaults to some
+ * known state
+ ***********************************************/
+
+/* Set out the default styles for the document */
+body {
+  font-family: Verdana,Helvetica,Arial,sans-serif;
+  font-size: 76%;
+}
+
+p,ul,ol,dl {
+  font-size: 1em;
+}
+
+th {
+  font-weight: bold;
+}
+
+/* Set the attributes which are common to all headings */
+h1,h2,h3,h4,h5,h6 {
+  font-weight: bold;
+}
+
+/* Now simply give each heading its own font size */
+h1 { font-size: 2em; }
+h2 { font-size: 1.8em; }
+h3 { font-size: 1.6em; }
+h4 { font-size: 1.4em; }
+h5 { font-size: 1.2em; }
+h6 { font-size: 1em; }
+
+/* Want to make sure that pre uses a fixed width font */
+pre { font-family: Courier, monospace; font-size: 1em }
+
+/* All of these tags are use bold font by default */
+strong,b { font-weight: bold; }
+
+/* All of these tags use italic font by default */
+em,i,cite,dfn,var { font-style: italic; }
+
+/* All of these tags use fixed width font by default */
+samp,code,tt,kbd { font-family: Courier, monospace; }
+
+/* End */

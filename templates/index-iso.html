@@ -1,8 +1,8 @@
 [% WRAPPER page.tt %]
   <h2>ISO Images</h2>
 
-  [% IF isos.size > 0 %]
-    <table id="isos">
+  [% IF isos && isos.size > 0 %]
+    <table id="isos" class="data">
       <thead>
         <tr>
           <th>Filename</th>
@@ -12,8 +12,8 @@
       </thead>
       <tbody>
         [% FOREACH isos %]
-          <tr>
-            <td class="filename"><a href="isos/[% filename %]">[% label %]</a></td>
+          <tr class="[% IF loop.index() % 2 == 0 %]odd[%ELSE%]even[%END%]">
+            <td class="filename"><a href="isos/[% filename | html %]">[% label | html %]</a></td>
             <td class="size">[% size %]</td>
             <td class="md5sum">[% md5sum %]</td>
           </tr>

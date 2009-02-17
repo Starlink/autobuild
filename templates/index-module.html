@@ -2,13 +2,15 @@
   <h2>Modules</h2>
 
   [% IF modules.size > 0 %]
-    <table class="modules">
+    <table id="modules" class="data">
+      <tbody>
       [% FOREACH modules %]
-        <tr>
-          <th><a href="module-[% name %].html">[% label %]</a></th>
+        <tr class="[% IF loop.index() % 2 == 0 %]odd[%ELSE%]even[%END%]">
+          <td><a href="module-[% name | html %].html">[% label | html %]</a></td>
           <td class="[% status %]">[% status %]</td>
         </tr>
       [% END %]
+      </tbody>
     </table>
     
   [% ELSE %]

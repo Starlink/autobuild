@@ -18,7 +18,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
-# $Id$
+# $Id: Disk.pm,v 1.11 2007/12/08 21:03:02 danpb Exp $
 
 =pod
 
@@ -45,15 +45,14 @@ directory tree on local disk.
 package Test::AutoBuild::Repository::Disk;
 
 use strict;
-use vars qw(@ISA);
+use warnings;
 use Carp qw(confess);
-use Test::AutoBuild::Repository;
+use File::Path;
+use File::Spec::Functions;
 use Test::AutoBuild::Lib;
 
-@ISA = qw(Test::AutoBuild::Repository);
+use base qw(Test::AutoBuild::Repository);
 
-
-=pod
 
 =item my $mod = Test::AutoBuild::Repository::Disk->new(  );
 
@@ -72,23 +71,38 @@ sub new {
 
 sub export {
     my $self = shift;
+    my $runtime = shift;
+    my $src = shift;
+    my $dst = shift;
+    my $logfile = shift;
 
-    my $name = shift;		# Name of the module to export.
-    my $module = shift;		# Module object.
+    my $log = Log::Log4perl->get_logger();
 
-    # Don't support checking out multiple paths yets
-    my $path= $module->paths->[0];
+    #rmtree($dst);
+    eval {
+	mkpath($dst);
+    };
+    if ($@) {
+	die "could not create directory '$dst': $@";
+    }
 
-    Test::AutoBuild::Lib::_copy($path,$name);
+    my $basedir = $self->option("directory");
 
-    1;				# Don't support change-checking yet.
+    if ($basedir) {
+	$src = catfile($basedir, $src);
+    }
+
+    $log->debug("copying $src to $dst");
+    Test::AutoBuild::Lib::_copy($src, $dst);
+
+    1; # Don't support change-checking yet.
 }
 
 1 # So that the require or use succeeds.
 
 __END__
 
-=back 4
+=back
 
 =head1 AUTHORS
 
@@ -100,6 +114,6 @@ Copyright (C) 2002-2004 Daniel Berrange <dan@berrange.com>
 
 =head1 SEE ALSO
 
-L<perl(1)>
+C<perl(1)>,  L<Test::AutoBuild::Repository>
 
 =cut

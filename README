@@ -8,7 +8,8 @@ continuous, unattended, automated software builds.
 
 Pristine sources are checked out from a version control 
 repository (currently has support for CVS, normal filesystem, 
-Perforce & GNU Arch). A shell script (typically provided by
+Perforce, GNU Arch, Mercurial, GIT, Monotone, Darcs, SVK
+and Subversion). A shell script (typically provided by
 the application developer) is invoked to build the software 
 and install it in a virtual root. Snapshots of the virtual 
 root are taken before and after build to identify which 

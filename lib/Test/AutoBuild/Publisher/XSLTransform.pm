@@ -18,7 +18,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
-# $Id$
+# $Id: XSLTransform.pm,v 1.5 2007/12/08 21:03:02 danpb Exp $
 
 =pod
 
@@ -45,6 +45,7 @@ to the destination directory.
 package Test::AutoBuild::Publisher::XSLTransform;
 
 use strict;
+use warnings;
 use Carp qw(confess);
 use Test::AutoBuild::Publisher;
 use File::Path;
@@ -52,8 +53,6 @@ use vars qw(@ISA);
 
 @ISA = qw(Test::AutoBuild::Publisher);
 
-
-=pod
 
 =item my $mod = Test::AutoBuild::Publisher::XSLTransform->new(  );
 
@@ -74,7 +73,7 @@ sub publish {
     my $self = shift;
     my $src = shift;
     my $dst = shift;
-    
+
     my $xsl = $self->option("xsl-file");
 
     Test::AutoBuild::Lib::run("xsltproc $xsl $src > $dst");
@@ -86,7 +85,7 @@ sub publish {
 
 __END__
 
-=back 4
+=back
 
 =head1 AUTHORS
 
@@ -98,6 +97,6 @@ Copyright (C) 2002-2004 Daniel Berrange <dan@berrange.com>
 
 =head1 SEE ALSO
 
-L<perl(1)>
+C<perl(1)>, L<Test::AutoBuild::XSLTransform>
 
 =cut

@@ -18,7 +18,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
-# $Id$
+# $Id: Lib.pm,v 1.31 2007/12/08 17:35:16 danpb Exp $
 
 =pod
 
@@ -30,12 +30,6 @@ Test::AutoBuild::Lib - A library of useful routines
 
   use Test::AutoBuild::Lib;
 
-  my \@groups = Test::AutoBuild::Lib::load_groups($config);
-  my \@repositories = Test::AutoBuild::Lib::load_repositories($config);
-  my \@outputs = Test::AutoBuild::Lib::load_outputs($config);
-  my \@modules = Test::AutoBuild::Lib::load_modules($config);
-  my \@package_types = Test::AutoBuild::Lib::load_package_types($config);
-
   my \@sorted_modules = Test::AutoBuild::Lib::sort_modules(\@modules);
 
   my \%packages = Test::AutoBuild::Lib::package_snapshot($package_types);
@@ -44,8 +38,6 @@ Test::AutoBuild::Lib - A library of useful routines
   my $string = Test::AutoBuild::Lib::pretty_size($bytes);
   my $string = Test::AutoBuild::Lib::pretty_date($seconds);
   my $string = Test::AutoBuild::Lib::pretty_time($seconds);
-
-  my 
 
 =head1 DESCRIPTION
 
@@ -60,362 +52,28 @@ that are shared across many different modules.
 
 package Test::AutoBuild::Lib;
 
+use warnings;
 use strict;
+
 use Carp qw(confess);
-use Test::AutoBuild::Group;
-use Test::AutoBuild::Module;
-use Test::AutoBuild::PackageType;
 use File::Copy;
+use File::Glob ':glob';
 use File::Path;
 use File::stat;
+use File::Spec::Functions;
+use Log::Log4perl;
 use POSIX qw(strftime);
-
-
-=pod
-
-=item my \@groups = Test::AutoBuild::Lib::load_groups($config);
-
-Loads the groups defined in the configuration object C<config>. The
-config object is an instance of the C<Config::Record> class. The
-elements in the returned array reference are instances of the 
-Test::AutoBuild::Group class.
-
-=cut
-
-sub load_groups {
-    my $config = shift;
-
-    my $data = $config->get("groups", {
-        global => {
-            label => "Global",
-            }
-    });
-    my $groups = {};
-
-    foreach my $name (keys %{$data}) {
-        my $params = $data->{$name};
-        confess "no label for $name group" unless exists $params->{label};
-
-        my $group = Test::AutoBuild::Group->new(name => $name, %{$params});
-        $groups->{$name} = $group;
-    }
-
-    $groups->{global} = Test::AutoBuild::Group->new(name => "global", label => "Global")
-        unless exists $groups->{global};
-
-    return $groups;
-}
-
-=pod
-
-=item my \@publishers = Test::AutoBuild::Lib::load_publishers($config);
-
-Loads the artifact publishing modules defined in the configuration 
-object C<config>. The config object is an instance of the 
-C<Config::Record> class. The elements in the returned array reference 
-are instances of a subclass of Test::AutoBuild::Publisher.
-
-=cut
-
-sub load_publishers {
-    my $config = shift;
-
-    my $data = $config->get("publishers", {
-      copy => {
-        label => "File Copier",
-        module => "Test::AutoBuild::Publisher::Copy"
-      }
-    });
-    my $publishers = {};
-
-    foreach my $name (keys %{$data}) {
-        my $params = $data->{$name};
-        confess "no label for $name group" unless exists $params->{label};
-
-        my $module = $data->{$name}->{module};
-        confess "no module for $name publisher" unless defined $module;
-
-        eval "use $module;";
-        die $@ if $@;
-        my $publisher = $module->new(name => $name, %{$params});
-        $publishers->{$name} = $publisher;
-    }
-
-    return $publishers;
-}
-
-=pod
-
-=item my \@repositories = Test::AutoBuild::Lib::load_repositories($config);
-
-Loads the repositories defined in the configuration object C<config>. The
-config object is an instance of the C<Config::Record> class. The
-elements in the returned array reference are instances of the 
-Test::AutoBuild::Repository class.
-
-=cut
-
-sub load_repositories {
-    my $config = shift;
-
-    my $data = $config->get("repositories", {
-        cvs => {
-            module => "Test::AutoBuild::Repository::CVS",
-            label => "CVS Repository"
-            }
-    });
-    my $reps = {};
-
-    foreach my $name (keys %{$data}) {
-        my $label = $data->{$name}->{label};
-        confess "no label for $name repository" unless defined $label;
-
-        my $opts = $data->{$name}->{options};
-        $opts = {} unless defined $opts;
-
-        my $env = $data->{$name}->{env};
-        $env = {} unless defined $env;
-
-        my $module = $data->{$name}->{module};
-        confess "no module for $name repository" unless defined $module;
-
-        eval "use $module;";
-        die $@ if $@;
-
-        my $rep = $module->new(label => $label,
-                               name => $name,
-                               options => $opts,
-                               env => $env);
-        $reps->{$name} = $rep;
-    }
-
-    return $reps;
-}
-
-
-=pod
-
-=item my \@outputs = Test::AutoBuild::Lib::load_outputs($config);
-
-Loads the outputs defined in the configuration object C<config>. The
-config object is an instance of the C<Config::Record> class. The
-elements in the returned array reference are instances of the 
-Test::AutoBuild::Output class.
-
-=cut
-
-sub load_outputs {
-    my $config = shift;
-
-    my $start_time = time;
-
-    my $data = $config->get("output", {
-        http => {
-            module => 'Test::AutoBuild::Output::PackageCopier',
-            label => 'Web Distribution Site',
-            options => {
-                directory => '/var/www/autobuild'
-                }
-        }
-    });
-
-    my $outputs = {};
-
-    foreach my $name (keys %{$data}) {
-
-        my $label = $data->{$name}->{label};
-        confess "no label for $name output" unless defined $label;
-
-        my $module = $data->{$name}->{module};
-        confess "no module for $name output" unless defined $module;
-
-        my $opts = $data->{$name}->{options};
-        $opts = {} unless defined $opts;
-
-        eval "use $module;";
-        die $@ if $@;
-
-        my $output = $module->new(label => $label,
-                                  name => $name,
-                                  options => $opts,
-                                  start_time => $start_time);
-        $outputs->{$name} = $output;
-    }
-
-    return $outputs;
-}
-
-=pod
-
-=item my \@package_types = Test::AutoBuild::Lib::load_package_types($config);
-
-Loads the package_types defined in the configuration object C<config>. The
-config object is an instance of the C<Config::Record> class. The
-elements in the returned array reference are instances of the 
-Test::AutoBuild::PackageType class.
-
-=cut
-
-
-sub load_package_types {
-    my $config = shift;
-
-    my $data = $config->get("package-types", {
-        rpm => {
-            label => 'Linux RPM',
-            extension => '.rpm',
-            spool => '~/rpm'
-            }
-    });
-
-    my $package_types = {};
-
-    foreach my $name (keys %{$data}) {
-        my $params = $data->{$name};
-
-        $package_types->{$name} = Test::AutoBuild::PackageType->new(name => $name, %{$params});
-    }
-
-    return $package_types;
-}
-
-=pod
-
-=item my \@modules = Test::AutoBuild::Lib::load_modules($config);
-
-Loads the modules defined in the configuration object C<config>. The
-config object is an instance of the C<Config::Record> class. The
-elements in the returned array reference are instances of the 
-Test::AutoBuild::Module class.
-
-=cut
-
-
-sub load_modules {
-    my $config = shift;
-
-    my $data = $config->get("modules", {
-        test => {
-            label => 'Test Application',
-            paths => 'test/test-app:HEAD',
-            repository => 'cvs',
-            env => {
-                X_TOOLS_HOME => '/usr/local/foo'
-                }
-        }
-    });
-
-    my $modules = {};
-
-    foreach my $name (keys %{$data}) {
-        my $params = $data->{$name};
-
-        $modules->{$name} = Test::AutoBuild::Module->new(name => $name, %{$params});
-    }
-
-    return $modules;
-}
-
-
-=pod
-
-=item my \@sorted_modules = Test::AutoBuild::Lib::sort_modules(\@modules);
-
-Performs a topological sort of modules based on their declared
-build dependancies. The elements in the C<modules> parameter 
-should be instances of Test::AutoBuild::Module class. The returned
-array ref will be in sorted order.
-
-=cut
-
-sub sort_modules {
-    my $modules = shift;
-
-    my $order = [];
-
-    my %pairs;	# all pairs ($l, $r)
-    my %npred;	# number of predecessors
-    my %succ;	# list of successors
-
-    # tsort code by Jeffrey S. Haemer, <jsh@boulder.qms.com>
-    # SEE ALSO tsort(1), tcsh(1), tchrist(1)
-    # Algorithm stolen from Jon Bentley (I<More Programming Pearls>, pp. 20-23),
-    # Who, in turn, stole it from Don Knuth
-    # (I<Art of Computer Programming, volume 1: Fundamental Algorithms>,
-    # Section 2.2.3)
-
-    foreach my $name (keys %{$modules}) {
-        my $depends = $modules->{$name}->dependencies();
-        if ($#{$depends} > -1) {
-            foreach (@{$depends}) {
-                die "module $name depends on non-existent module $_"
-                    unless exists $modules->{$_};
-                next if defined $pairs{$_}{$name};
-                $pairs{$_}{$name}++;
-                $npred{$_} += 0;
-                $npred{$name}++;
-                push @{$succ{$_}}, $name;
-            }
-        } else {
-            $pairs{$name}{$name}++;
-            $npred{$name} += 0;
-            push @{$succ{$name}}, $name;
-        }
-    }
-    # create a list of nodes without predecessors
-    my @list = &_rand_order(grep {!$npred{$_}} keys %npred);
-    while (@list) {
-        $_ = pop @list;
-        push @{$order}, $_;
-        foreach my $child (@{$succ{$_}}) {
-            # depth-first (default)
-            push @list, $child unless --$npred{$child};
-        }
-    }
-    return $order;
-}
-
-sub _rand_order { 
-    my @new_array;
-    while (@_ > 0) {
-	push @new_array, splice(@_,int(rand @_),1);
-    }
-    return @new_array;
-}
-
-=pod
-
-=item my \%packages = Test::AutoBuild::Lib::package_snapshot(\@pacakge_types);
-
-Takes a snapshot all packages on disk for each package
-type. The elements in the C<package_types> parameter 
-should be instances of Test::AutoBuild::PackageType.
-The keys in the returned hash ref will be the fully
-qualified filenames of the packages, while the values
-will be instances of Test::AutoBuild::Package class.
-
-=cut
-
-sub package_snapshot {
-    my $package_types = shift;
-
-    my $packages = {};
-    foreach my $name (keys %{$package_types}) {
-        my $packs = $package_types->{$name}->snapshot();
-
-        map { $packages->{$_} = $packs->{$_} } keys %{$packs};
-    }
-    return $packages;
-}
-
-
-=pod
+use Sys::Hostname;
+use Template;
+use IO::Scalar;
+use Config::Record;
+use Test::AutoBuild::Command::Local;
 
 =item my %packages = Test::AutoBuild::Lib::new_packages(\%before, \%after);
 
 Compares the sets of packages defined by the C<before> and C<after>
 package snapshots. The returned hash ref will have entries for any
-files in C<after>, but not in C<before>, or any files which were 
+files in C<after>, but not in C<before>, or any files which were
 modified between C<before> and C<after> snapshots.
 
 =cut
@@ -426,20 +84,18 @@ sub new_packages {
 
     my $packages = {};
     foreach my $file (keys %{$after}) {
-        if (!exists $before->{$file} ||
-            $before->{$file}->last_modified() != $after->{$file}->last_modified()) {
-            $packages->{$file} = $after->{$file};
-        }
+	if (!exists $before->{$file} ||
+	    $before->{$file}->last_modified() != $after->{$file}->last_modified()) {
+	    $packages->{$file} = $after->{$file};
+	}
     }
 
     return $packages;
 }
 
-=pod
-
 =item my $string = Test::AutoBuild::Lib::pretty_date($seconds);
 
-Formats the time specified in the C<seconds> parameter to 
+Formats the time specified in the C<seconds> parameter to
 follow the style "Wed Jan 14 2004 21:45:23 UTC".
 
 =cut
@@ -448,18 +104,16 @@ sub pretty_date {
     my $time = shift;
 
     if (defined $time) {
-        return strftime "%a %b %e %Y %H:%M:%S UTC", gmtime($time);
+	return strftime "%a %b %e %Y %H:%M:%S UTC", gmtime($time);
     } else {
-        return "";
+	return "";
     }
 }
-
-=pod
 
 =item my $string = Test::AutoBuild::Lib::pretty_time($seconds);
 
 Formats an interval in seconds for friendly viewing according
-to the style "2h 27m 12s" - ie 2 hours, 27 minutes and 12 
+to the style "2h 27m 12s" - ie 2 hours, 27 minutes and 12
 seconds.
 
 =cut
@@ -468,26 +122,24 @@ sub pretty_time {
     my $time = shift;
 
     if (defined $time) {
-        my $time_hours;
-        my $time_minutes;
-        my $time_seconds;
-        {
-            use integer;
-            $time_hours = $time / 3600;
-            $time_minutes = ($time - ($time_hours * 3600)) / 60;
-            $time_seconds = $time - ($time_hours * 3600) - ($time_minutes * 60);
-        };
+	my $time_hours;
+	my $time_minutes;
+	my $time_seconds;
+	{
+	    use integer;
+	    $time_hours = $time / 3600;
+	    $time_minutes = ($time - ($time_hours * 3600)) / 60;
+	    $time_seconds = $time - ($time_hours * 3600) - ($time_minutes * 60);
+	};
 
-        return sprintf ("%02dh %02dm %02ds",
-                        $time_hours,
-                        $time_minutes,
-                        $time_seconds);
+	return sprintf ("%02dh %02dm %02ds",
+			$time_hours,
+			$time_minutes,
+			$time_seconds);
     } else {
-        return "";
+	return "";
     }
 }
-
-=pod
 
 =item my $string = Test::AutoBuild::Lib::pretty_size($bytes);
 
@@ -503,17 +155,15 @@ sub pretty_size {
     my $size = shift;
 
     if ($size > (1024 * 1024)) {
-        return sprintf("%.2f MB", ($size / (1024 * 1024)));
+	return sprintf("%.2f MB", ($size / (1024 * 1024)));
     } elsif ($size > 1024) {
-        return sprintf("%.2f KB", ($size / 1024));
+	return sprintf("%.2f KB", ($size / 1024));
     } else {
-        return $size . " b";
+	return $size . " b";
     }
 }
 
-=pod
-
-=item my $output = Test::AutoBuild::Lib::run($command, \%env);
+=item my $status = Test::AutoBuild::Lib::run($comnand, \%env);
 
 Executes the program specified in the C<command> argument.
 The returned value is the output of the commands standard
@@ -528,93 +178,278 @@ sub run {
     my $command = shift;
     my $env = shift;
 
-    my $output = "";
-
-    # print "running: $command\n";
+    my $log = Log::Log4perl->get_logger();
 
     local %ENV = %ENV;
     foreach (keys %{$env}) {
-        $ENV{$_} = $env->{$_};
+	$log->debug("Set env $_ $env->{$_}");
+	$ENV{$_} = $env->{$_};
     }
 
-    $output = `$command`;
+    my $c = Test::AutoBuild::Command::Local->new(cmd => ["/bin/sh", "-c", $command],
+						 env => $env);
 
-    if (! defined ($output) || $?) {
-        die "error running '$command': $!\n";
-    }
-
-    # print "output: $output\n";
-
+    my $output = '';
+    my $status = $c->run(\$output, \$output);
+    die "cannot run /bin/sh -c $command: $status" if $status;
     return $output;
 }
 
 sub _copy {
+    my $options = shift;
+    if (ref($options) ne "HASH") {
+	unshift @_, $options;
+	$options = undef;
+    }
+
+    my $target = pop;
     my @source = @_;
-    my $target = pop @source;
 
-    if (@source < 1) {
-        if (defined $target) {
-            die "no target specified";
-        } else {
-            die "no source or target specified";
-        }
-    }
-    if (@source > 1 && -e $target && ! -d $target) {
-        die "multiple sources specified but '$target' exists and is not a directory";
-    }
-    my $cat_dirs = 0;
-    if (-d $target) {
-	$cat_dirs = 1;
-    }
-    foreach (@source) {
-        $_ = File::Spec->canonpath($_);
-	if (!-e) {
-	    confess "Source file $_ to copy does not exist\n";
+    &copy_files(\@source, $target, $options);
+}
+
+sub copy_files {
+    my $source = shift;
+    my $target = shift;
+    my $options = shift;
+
+    my $log = Log::Log4perl->get_logger();
+
+    my $attrs = ['mode','ownership','timestamps','links'];
+    $options = {
+	"link" => 0,
+	"preserve" => {
+	    'mode' => 0,
+	    'ownership' => 0,
+	    'links' => 1
+	    },
+	"symbolic-link" => 0,
+    } unless defined $options;
+
+    $options->{preserve} = {"all"=>1} unless exists $options->{preserve};
+
+    if ($options->{preserve}->{all}) {
+	for (@$attrs) {
+	    $options->{preserve}->{$_} = 1;
 	}
+    }
 
-        if (-d && !-l) {
-            my $dir = $_;
-            my @dirs = File::Spec->splitdir($dir);
-            my $new_target = $cat_dirs ? File::Spec->catdir($target, $dirs[$#dirs]) : $target;
-            my @files;
-            opendir(DIR, $dir) or die("can't opendir $dir: $!");
-            push @files, grep { !m/^\.$/ && !m/^\.\.$/ } readdir(DIR);
-            closedir DIR;
-            foreach (@files) { $_ = File::Spec->catfile($dir, $_) };
-            mkpath($new_target);
-            @files > 0 && _copy (@files, $new_target);
-        } else {
-	    my @dirs = File::Spec->splitdir($target);
-	    if (@dirs > 1) {
-		pop @dirs;
-		mkpath(File::Spec->catfile(@dirs));
-	    }
-            my $newfile = -d $target ? File::Spec->catfile($target,(reverse File::Spec->splitpath($_))[0]) : $target;
-            if (-l $_) {
-                symlink (readlink, $newfile);
-                &setStats($newfile, lstat($_));
-            } else {
-                if (!copy($_, $target)) {
-		    confess "cannot copy $_ to $target: $!";
+    my @expanded_sources;
+    my @source = ref($source) ? @{$source} : ($source);
+    for (@source) {
+	push @expanded_sources, bsd_glob($_);
+    }
+
+    if (@expanded_sources > 1 && ! -d $target) {
+	if (-e $target) {
+	    die "multiple sources specified but '$target' is not a directory";
+	}
+	eval {
+	    mkpath($target);
+	};
+	if ($@) {
+	    die "could not create directory '$target': $@";
+	}
+    }
+    foreach (@expanded_sources) {
+	$_ = File::Spec->canonpath($_);
+	my $newfile = -d $target ? File::Spec->catfile($target,(File::Spec->splitpath($_))[-1]) : $target;
+	if (-l $_ && $options->{preserve}->{links}) {
+	    my $oldfile = readlink;
+	    my @dir = File::Spec->splitdir($newfile);
+	    pop @dir;
+	    my $basedir = File::Spec->catdir(@dir);
+	    if (!-d $basedir) {
+		eval {
+		    $log->debug("Creating base $basedir");
+		    mkpath($basedir);
+		};
+		if ($@) {
+		    die "could not create directory '$basedir': $@";
 		}
-                &setStats($newfile, stat($_));
-            }
-        }
+	    }
+	    symlink ($oldfile, $newfile) or die "cannot create symlink $newfile";
+	    &setStats($newfile, lstat($_));
+	} else {
+	    if (!-e) {
+		confess "cannot stat '$_': No such file or directory";
+	    } elsif (-d) {
+		$log->debug("copying directory $_");
+		my $dir = $_;
+		my @dirs = File::Spec->splitdir($dir);
+		my $new_target = File::Spec->catdir($target, $dirs[$#dirs]);
+		my @files;
+		opendir(DIR, $dir) or die("can't opendir $dir: $!");
+		push @files, grep { !m/^\.$/ && !m/^\.\.$/ } readdir(DIR);
+		closedir DIR;
+		foreach (@files) { $_ = File::Spec->catfile($dir, $_) };
+		eval {
+		    mkpath($new_target);
+		};
+		if ($@) {
+		    die "could not create directory '$new_target': $@";
+		}
+		@files > 0 && _copy (@files, $new_target);
+	    } else {
+		my @dir = File::Spec->splitdir($newfile);
+		pop @dir;
+		my $basedir = File::Spec->catdir(@dir);
+		if (!-d $basedir) {
+		    eval {
+			$log->debug("Creating base $basedir");
+			mkpath($basedir);
+		    };
+		    if ($@) {
+			die "could not create directory '$basedir': $@";
+		    }
+		}
+
+		if (-e $newfile) {
+		    $log->debug("unlinking target $newfile which already exists");
+		    if ((unlink $newfile) != 1) {
+			die "could not unlink target $newfile: $!";
+		    }
+		}
+
+		if (-f && $options->{'symbolic-link'}){
+		    $log->debug("symbolic linking file $_ to $newfile");
+		    if (!symlink ($_, $newfile)) {
+			die "could not symbolic link to target $newfile: $!";
+		    }
+		} elsif (-f && $options->{link}){
+		    $log->debug("linking file $_ to $newfile");
+		    if (!link ($_, $newfile)) {
+			# XXX fallback to copy ?
+			die "could not hardlink to target $newfile: $!";
+		    }
+		} else {
+		    $log->debug("copying file $_ to $newfile");
+		    if (!copy($_, $newfile)) {
+		       die "could not copy to target $newfile: $!";
+		    }
+		    &setStats($newfile, stat($_));
+		}
+	    }
+	}
     }
 }
 
 sub setStats {
     my $file = shift;
     my $sb = shift;
+    confess "called setStats with an undefined file" unless defined $file;
+    confess "called setStats with an undefined sb" unless defined $sb;
     chmod ($sb->mode, $file);
     chown ($sb->uid, $sb->gid, $file);
+}
+
+sub delete_files {
+    my $dir = shift;
+
+    my $log = Log::Log4perl->get_logger();
+
+    my $glob = catfile($dir, "*");
+    $log->info("Removing all files matching '$glob'");
+
+    my @todelete = bsd_glob($glob);
+    foreach (@todelete) {
+	$log->info("File to remove is '$_'");
+    }
+
+    if (@todelete) {
+	rmtree(\@todelete, 0, 0);
+    }
+}
+
+sub _expand_macro {
+    my $in = shift;
+    my $macro = shift;
+    my $name = shift;
+    my @values = @_;
+    my @out;
+    foreach my $entry (@{$in}) {
+	my $src = $entry->[0];
+	my $dst = $entry->[1];
+	if ($dst =~ /$macro/) {
+	    foreach my $value (@values) {
+		(my $file = $dst) =~ s/$macro/$value/;
+		my $vars = {};
+		map { $vars->{$_} = $entry->[2]->{$_} } keys %{$entry->[2]};
+		$vars->{$name} = $value;
+		push @out, [$src, $file, $vars];
+	    }
+	} else {
+	    push @out, $entry;
+	}
+    }
+    return \@out;
+}
+
+sub _expand_standard_macros {
+    my $in = shift;
+    my $runtime = shift;
+    my $out = _expand_macro($in, "%m", "module", $runtime->modules);
+    $out = _expand_macro($out, "%p", "package_type", $runtime->package_types);
+    $out = _expand_macro($out, "%g", "group", $runtime->groups);
+    $out = _expand_macro($out, "%r", "repository", $runtime->repositories);
+    $out = _expand_macro($out, "%c", "build_counter", $runtime->build_counter);
+    $out = _expand_macro($out, "%h", "hostname", hostname());
+    return $out;
+}
+
+=item ($config, $fh, $error) = Test::AutoBuild::Lib::load_template_config($file, [\%vars])
+
+This method loads the content of the configuration file C<$file>,
+passes it through the L<Template> module, and then creates an
+instance of the L<Config::Record> module. The second optiona C<%vars>
+parameter is a hash reference containing a set of variables which
+will be passed through to the templating engine. A 3 element list is
+returned, the first element containing the L<Config::Record>
+object, the second a scalar containing the post-processed configuration
+file, the last containing any error message generated.
+
+=cut
+
+sub load_templated_config {
+    my $file = shift;
+    my $vars = shift || {};
+
+    return (undef, undef, "file $file does not exist")
+	unless -f $file;
+
+    my %template_config = (
+			   ABSOLUTE => 1,
+			   RELATIVE => 1,
+			   );
+
+    my $template = Template->new(\%template_config);
+    my $data;
+    my $fh = IO::Scalar->new(\$data);
+
+    $template->process($file, $vars, $fh)
+	or return (undef, undef, $template->error());
+
+    $fh->setpos(0);
+    my $config;
+    eval {
+	$config = Config::Record->new(file => $fh);
+    };
+    my $err = $@;
+    my @data_file;
+    if ($err) {
+	my $i = 0;
+	foreach (split /\n/, $data) {
+	    push @data_file, (sprintf "%4d  %s\n", (++$i), $_);
+	}
+    }
+    return ($config, join("", @data_file), $err);
 }
 
 1 # So that the require or use succeeds.
 
 __END__
 
-=back 4
+=back
 
 =head1 AUTHORS
 
@@ -622,10 +457,11 @@ Daniel Berrange <dan@berrange.com>, Dennis Gregorovic <dgregorovic@alum.mit.edu>
 
 =head1 COPYRIGHT
 
-Copyright (C) 2002-2004 Daniel Berrange <dan@berrange.com>
+Copyright (C) 2002-2005 Daniel Berrange <dan@berrange.com>
 
 =head1 SEE ALSO
 
-L<perl(1)>
+C<perl(1)>, L<Test::AutoBuild>, L<Test::AutoBuild::Runtime>, L<Template>,
+L<Config::Record>
 
 =cut

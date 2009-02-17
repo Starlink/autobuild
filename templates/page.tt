@@ -1,28 +1,33 @@
 [% menu = [
      {
-       title = "List by name"
+       title = "Modules by name"
        url = "index-module.html"
      }
      {
-       title = "List by group"
+       title = "Modules by group"
        url = "index.html"
      }
      {
-       title = "List by repository"
+       title = "Modules by repository"
        url = "index-repository.html"
      }
      {
-       title = "List by ISO"
+       title = "ISO images"
        url = "index-iso.html"
+     }
+     {
+       title = "Builder status"
+       url = "status.html"
      }
    ] %]
 <html>
   <head>
     <title>[% title %]</title>
 
-    <link rel="stylesheet" href="[%defaultCSS%]" title="Default Theme" type="text/css">
-    <link rel="stylesheet" href="redhat.css" title="Red Hat Theme" type="text/css">
-    <link rel="stylesheet" href="bluecurve.css" title="Blue Curve Theme" type="text/css">
+    <link rel="Stylesheet" href="[% default_css %]" title="Default Theme" type="text/css">
+    <link rel="Alternate StyleSheet" href="test-autobuild.css" title="Test-AutoBuild Theme" type="text/css"> 
+    <link rel="Alternate StyleSheet" href="classic-red.css" title="Classic Red Theme" type="text/css">
+    <link rel="Alternate StyleSheet" href="classic-blue.css" title="Classic Blue Theme" type="text/css">
 
     <meta name="Generator" content="Test-AutoBuild: http://www.autobuild.org">
   </head>
@@ -31,25 +36,37 @@
 
   <h1>[% title %]</h1>
 
-    <table id="status">
-      <tr>
-        <th>Status:</th><td class="[% status %]">[%IF status == 'success' %]Good[% ELSE %]Bad[% END %]</td>
-      </tr>
-      <tr>
-        <th>Date:</th><td>[% date %]</td>
-      </tr>
-      <tr>
-        <th>Start Time:</th><td>[% gmtime %]<br>[% localtime %]</td>
-      </tr>
-      <tr>
-        <th>Cycle Time:</th><td>[% cycleTime %]</td>
-      </tr>
-      <tr>
-        <th>Build Counter:</th><td>[% buildCounter %]</td>
-      </tr>
-    </table>
+    <div id="status">
+      <table class="properties">
+        <tbody>
+        <tr class="odd">
+          <th>Overall status:</th><td class="[% status %]">[%IF status == 'success' %]Good[% ELSE %]Bad[% END %]</td>
+        </tr>
+        <tr class="even">
+          <th>Date:</th><td>[% cycle_start_date %]</td>
+        </tr>
+        <tr class="odd">
+          <th>Start Time:</th><td>[% cycle_start_time_utc %]<br>[% cycle_start_time_local %]</td>
+        </tr>
+        <tr class="even">
+          <th>Cycle Duration:</th><td>[% cycle_duration %]</td>
+        </tr>
+        <tr class="odd">
+          <th>Build Counter:</th><td>[% build_counter %]</td>
+        </tr>
+        <tr class="even">
+          <th>Build Timestamp:</th><td>[% build_timestamp %]</td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
 
-    <ul id="menu">
+    <div id="logo">
+      <img src="logo-[%status%].png" width="80" height="81">
+    </div>
+
+    <div id="menu">
+      <ul>
       [%- FOREACH menu -%]
         [% IF templateDst == url %]
           <li><em>[% title %]</em></li>
@@ -57,13 +74,16 @@
           <li><a href="[% url %]">[% title %]</a></li>
         [% END %]
       [%- END -%]
-    </ul>
+      </ul>
+    </div>
 
+    <div id="body">
     [% content %]
+    </div>
 
     <div id="footer">
-      <p>Maintained by <a href="mailto:[% adminEmail %]">[% adminName %]</a></p>
-      <p>Status as an <a href="index.rss">RSS feed</a></p>
+      <p>Powered by <a href="http://autobuild.org/">Test-AutoBuild</a>, managed by <a href="mailto:[% admin_email %]">[% admin_name %]</a></p>
+      <p><img src="rss10.png" alt="RSS 1.0"> feed for <a href="index.rss">all modules</a>, or <a href="failures.rss">failed modules</a></p>
     </div>
   </body>
 </html>

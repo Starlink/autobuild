@@ -1,12 +1,18 @@
-# $Id$
+# -*- perl -*-
 
-BEGIN { $| = 1; print "1..1\n"; }
-END { print "not ok 1\n" unless $loaded; }
+use Test::More tests => 2;
+use warnings;
+use strict;
+use Log::Log4perl;
 
-use Test::AutoBuild;
-$loaded = 1;
-print "ok 1\n";
+BEGIN { 
+  use_ok("Test::AutoBuild");
+}
 
-# Local Variables:
-# mode: cperl
-# End:
+use Config::Record;
+Log::Log4perl::init("t/log4perl.conf");
+
+my $ab = Test::AutoBuild->new(config => "t/auto-build.conf");
+
+isa_ok($ab, "Test::AutoBuild");
+

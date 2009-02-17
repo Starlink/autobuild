@@ -18,7 +18,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
-# $Id$
+# $Id: Publisher.pm,v 1.5 2007/12/08 21:03:02 danpb Exp $
 
 =pod
 
@@ -30,9 +30,9 @@ Test::AutoBuild::Publisher - Simple publishering of modules
 
   use Test::AutoBuild::Publisher
 
-  my $publisher = Test::AutoBuild::Publisher->new(name => $name, 
-                                                  label => $label,
-                                                  options => \%options);
+  my $publisher = Test::AutoBuild::Publisher->new(name => $name,
+						  label => $label,
+						  options => \%options);
 
   my $name = $publisher->name([$newname]);
   my $label = $publisher->label([$newlabel]);
@@ -57,13 +57,12 @@ The valid configuration options for the C<publishers> block are
 package Test::AutoBuild::Publisher;
 
 use strict;
+use warnings;
 use Carp qw(confess);
 
-=pod
-
-=item my $publisher = Test::AutoBuild::Publisher->new(name => $name, 
-                                                      label => $label,
-                                                      [options => \%options]);
+=item my $publisher = Test::AutoBuild::Publisher->new(name => $name,
+						      label => $label,
+						      [options => \%options]);
 
 Creates a new publisher object. C<modules> is an array ref of Test::AutoBUild::Module
 objects representing the members of the publisher. C<name> is a short
@@ -89,8 +88,6 @@ sub new {
     return $self;
 }
 
-=pod
-
 =item my $name = $publisher->name([$newname]);
 
 Gets the name of the publisher. The name is a short alphanumeric
@@ -104,8 +101,6 @@ sub name {
     $self->{name} = shift if @_;
     return $self->{name};
 }
-
-=pod
 
 =item my $label = $publisher->label([$newlabel]);
 
@@ -121,13 +116,11 @@ sub label {
     return $self->{label};
 }
 
-=pod
-
 =item my $value = $publisher->option($name, [$newvalue]);
 
 Gets the value corresponding to the option C<name>. If the
 second C<newvalue> parameter is specified then the value
-for the option is updated. 
+for the option is updated.
 
 =cut
 
@@ -145,7 +138,7 @@ sub publish {
     my $self = shift;
     my $src = shift;
     my $dst = shift;
-    
+
     confess "module " . ref($self) . " forgot to implement the publish method";
 }
 
@@ -153,7 +146,7 @@ sub publish {
 
 __END__
 
-=back 4
+=back
 
 =head1 AUTHORS
 
@@ -165,6 +158,6 @@ Copyright (C) 2002-2004 Daniel Berrange <dan@berrange.com>
 
 =head1 SEE ALSO
 
-L<perl(1)>
+C<perl(1)>, L<Test::AutoBuild::Publisher::Copy>, L<Test::AutoBuild::Publisher::XSLTransform>
 
 =cut

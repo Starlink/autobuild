@@ -156,7 +156,7 @@ package-types = {
 
 publishers = {
   copy = {
-    label = ussc@star.rl.ac.uk
+    label = starlink@jiscmail.ac.uk
     module = Test::AutoBuild::Publisher::Copy
   }
 }

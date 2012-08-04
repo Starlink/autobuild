@@ -11,7 +11,7 @@ output = {
       url = URL_TO_BUILD_INDEX
       addresses = stardev@jiscmail.ac.uk
       smtp_server = outbox.rl.ac.uk
-      sender = ussc@star.rl.ac.uk
+      sender = starlink@jiscmail.ac.uk
       send-on-success = true
     }
   }
@@ -55,7 +55,7 @@ output = {
 #      variables = {
 #        httppath = URL_TO_BUILD_INDEX
 #        defaultCSS = bluecurve.css
-#        adminEmail = ussc@star.rl.ac.uk
+#        adminEmail = starlink@jiscmail.ac.uk
 #        adminName = Build Administrator
 #        title = Continuous Automatic Builder
 #      }
@@ -90,7 +90,7 @@ output = {
       variables = {
         httppath = URL_TO_BUILD_INDEX
         defaultCSS = bluecurve.css
-        adminEmail = ussc@star.rl.ac.uk
+        adminEmail = starlink@jiscmail.ac.uk
         adminName = Starlink Software
         title = Starlink Continuous Automatic Nightly Build
       }
